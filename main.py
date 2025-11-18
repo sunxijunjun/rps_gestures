@@ -1,42 +1,92 @@
 import cv2
 import mediapipe as mp
 import time
+import numpy as np
+import torch
+import torch.nn as nn
 
 CAMERA_INDEX = 1
+MODEL_PATH = "rps_model.pth"
+
 mp_hands = mp.solutions.hands
 mp_draw = mp.solutions.drawing_utils
-"""
-this script is not trained
-"""
-def classify_rps(hand_landmarks, image_height, image_width):
 
 
-    finger_tips = [4, 8, 12, 16, 20]
-    finger_pips = [3, 6, 10, 14, 18]
+class MLP(nn.Module):
+    def __init__(self, input_dim=63, hidden_dim=128, num_classes=3):
+        super().__init__()
+        self.net = nn.Sequential(
+            nn.Linear(input_dim, hidden_dim),
+            nn.ReLU(),
+            nn.Dropout(0.3),
+            nn.Linear(hidden_dim, hidden_dim),
+            nn.ReLU(),
+            nn.Dropout(0.3),
+            nn.Linear(hidden_dim, num_classes),
+        )
 
-    landmarks = hand_landmarks.landmark
-    finger_states = []
+    def forward(self, x):
+        return self.net(x)
 
-    for tip_id, pip_id in zip(finger_tips, finger_pips):
-        tip = landmarks[tip_id]
-        pip = landmarks[pip_id]
-        finger_states.append(tip.y < pip.y)
 
-    thumb, index, middle, ring, pinky = finger_states
+def load_trained_model(model_path: str, device):
+    checkpoint = torch.load(model_path, map_location=device)
 
-    straight_count = sum(finger_states)
+    input_dim = checkpoint["input_dim"]
+    label_map = checkpoint["label_map"]  # {"rock":0, "paper":1, "scissors":2}
+    num_classes = len(label_map)
 
-    if straight_count <= 1:
-        return "Rock"
-    elif straight_count == 2 and index and middle and not ring and not pinky:
-        return "Scissors"
-    elif straight_count >= 4:
-        return "Paper"
-    else:
+    model = MLP(input_dim=input_dim, hidden_dim=128, num_classes=num_classes)
+    model.load_state_dict(checkpoint["model_state_dict"])
+    model.to(device)
+    model.eval()
+
+    inv_label_map = {v: k for k, v in label_map.items()}
+
+    return model, inv_label_map, input_dim
+
+def landmarks_to_features(hand_landmarks) -> np.ndarray:
+
+    data = []
+    for lm in hand_landmarks.landmark:
+        data.extend([lm.x, lm.y, lm.z])
+    return np.asarray(data, dtype=np.float32)
+
+
+def classify_rps_with_model(
+    hand_landmarks,
+    image_height,
+    image_width,
+    model,
+    device,
+    inv_label_map,
+    input_dim,
+):
+
+    feat = landmarks_to_features(hand_landmarks)  # shape: (63,)
+
+    if feat.shape[0] != input_dim:
+
         return "Unknown"
+
+    x = torch.from_numpy(feat).unsqueeze(0).to(device)  # (1, 63)
+
+    with torch.no_grad():
+        logits = model(x)
+        pred_idx = torch.argmax(logits, dim=1).item()
+
+    label = inv_label_map.get(pred_idx, "Unknown")
+
+    return label.capitalize()  # "rock" -> "Rock"
 
 
 def main():
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    print(f"Using device: {device}")
+
+    model, inv_label_map, input_dim = load_trained_model(MODEL_PATH, device)
+    print(f"Loaded model from {MODEL_PATH}, input_dim={input_dim}")
+
     cap = cv2.VideoCapture(CAMERA_INDEX)
     if not cap.isOpened():
         raise RuntimeError(f"Cannot open camera {CAMERA_INDEX}")
@@ -74,7 +124,16 @@ def main():
                         mp_hands.HAND_CONNECTIONS
                     )
 
-                    gesture = classify_rps(hand_landmarks, h, w)
+
+                    gesture = classify_rps_with_model(
+                        hand_landmarks,
+                        h,
+                        w,
+                        model,
+                        device,
+                        inv_label_map,
+                        input_dim,
+                    )
 
             now = time.time()
             fps = 1.0 / (now - prev_time)
@@ -87,7 +146,7 @@ def main():
                         (10, 80), cv2.FONT_HERSHEY_SIMPLEX, 0.8,
                         (0, 255, 255), 2)
 
-            cv2.imshow("RPS Gesture (Camera 1)", frame)
+            cv2.imshow("RPS Gesture (Trained Model)", frame)
 
             if cv2.waitKey(1) & 0xFF == ord('q'):
                 break
