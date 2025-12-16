@@ -15,9 +15,9 @@ except ImportError:
 CAMERA_INDEX = 0
 MODEL_PATH = "rps_model.pth"
 
-USE_MQTT = False
-BROKER_HOST = "X"
-BROKER_PORT = 123456
+USE_MQTT = True
+BROKER_HOST = "broker.hivemq.com"
+BROKER_PORT = 1883
 TOPIC = "rps/gesture"
 
 STABLE_FRAMES = 10
