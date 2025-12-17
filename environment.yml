@@ -5,18 +5,14 @@ dependencies:
   - python=3.10
   - pip
   - numpy<2
+  - pandas
   - scipy
+  - scikit-learn
   - matplotlib
+  - joblib
   - tqdm
   - pillow
-  - sounddevice
   - attrs
   - cffi
   - typing_extensions
-  - opencv
-  - pytorch-cpu
-  - torchvision
-  - torchaudio
-
-  - pip:
-      - -r requirements.txt
+  - sounddevice
