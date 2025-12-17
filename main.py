@@ -5,6 +5,9 @@ import numpy as np
 import torch
 import torch.nn as nn
 import json
+import warnings
+warnings.filterwarnings("ignore", category=DeprecationWarning)
+warnings.filterwarnings("ignore", category=UserWarning)
 
 try:
     import paho.mqtt.client as mqtt

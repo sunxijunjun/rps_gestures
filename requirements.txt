@@ -1,0 +1,12 @@
+mediapipe>=0.10.14,<0.11
+imutils>=0.5.4,<0.6
+protobuf>=4.25,<5
+absl-py>=2,<3
+flatbuffers>=24
+packaging>=23
+filelock>=3.12
+fsspec>=2024
+sympy>=1.12
+mpmath>=1.2
+networkx>=3.0,<4
+colorama>=0.4; platform_system=="Windows"
